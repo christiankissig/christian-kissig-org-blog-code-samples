@@ -1,0 +1,10 @@
+[package]
+name = "lbuaf"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license-file = "../../LICENSE"
+description = "LB+UAF: flag-guarded reclamation, as written and after a legal compiler reordering"
+
+[profile.release]
+debug = true
