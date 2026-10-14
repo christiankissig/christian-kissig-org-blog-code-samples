@@ -1,10 +1,21 @@
 [package]
-name = "lbuaf"
+name = "rust-memory-model-samples"
 version = "0.1.0"
 edition = "2021"
 publish = false
 license-file = "../../LICENSE"
-description = "LB+UAF: flag-guarded reclamation, as written and after a legal compiler reordering"
+description = "Runnable versions of the code in the post 'Silence Is Not a Verdict'"
+
+[lib]
+name = "lbuaf"
+
+# loom is only compiled in under `--cfg loom`, so a plain build stays
+# dependency-free.
+[target.'cfg(loom)'.dev-dependencies]
+loom = "0.7"
 
 [profile.release]
 debug = true
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)'] }

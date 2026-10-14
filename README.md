@@ -8,7 +8,7 @@ path in the site's `content/` directory, so the code for
 
 | Directory | Post | What is in it |
 |---|---|---|
-| [`blog/2026-rust-memory-model`](blog/2026-rust-memory-model) | [Silence Is Not a Verdict](https://christian.kissig.org/blog/2026-rust-memory-model/) | LB+UAF: flag-guarded reclamation with relaxed atomics, as written and after a legal compiler reordering, under Miri, AddressSanitizer and a native litmus harness |
+| [`blog/2026-rust-memory-model`](blog/2026-rust-memory-model) | [Silence Is Not a Verdict](https://christian.kissig.org/blog/2026-rust-memory-model/) | Every code block in the post: LB+UAF as written and reordered, the three exhibits (load buffering, relaxed message passing, IRIW with SC fences), and the safe/unsafe examples, under loom, Miri, AddressSanitizer and native harnesses on x86 and Graviton |
 
 Each directory has its own README with the toolchain it needs, the commands to
 run, and the results recorded for the post.

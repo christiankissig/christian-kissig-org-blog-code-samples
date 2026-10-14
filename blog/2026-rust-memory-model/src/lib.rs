@@ -55,3 +55,19 @@ pub fn reordered() -> (usize, usize) {
     if r0 == 0 { unsafe { drop(Box::from_raw(p.load(Relaxed))) } }
     (r0, r1)
 }
+
+/// Safe Rust refuses to share a raw pointer between threads, before the
+/// memory model is ever consulted. This is the post's compile error, checked
+/// by `cargo test --doc`:
+///
+/// ```compile_fail,E0277
+/// use std::thread;
+///
+/// let mut data: usize = 0;
+/// let p: *mut usize = &mut data;
+///
+/// // error[E0277]: `*mut usize` cannot be sent between threads safely
+/// let h = thread::spawn(move || unsafe { *p = 1 });
+/// h.join().unwrap();
+/// ```
+pub mod raw_pointer_is_not_send {}

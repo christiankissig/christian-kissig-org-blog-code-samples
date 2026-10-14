@@ -1,0 +1,31 @@
+================ remote host / hardware ================
+ec2 instance type : c7g.2xlarge
+Linux ip-172-31-4-38.us-east-2.compute.internal 6.18.54-121.166.amzn2023.aarch64 #2 SMP Tue Oct  6 23:12:04 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux
+cpu microarch     : Neoverse-V1 (Graviton3) (part=0xd40)
+8
+=======================================================
+--- toolchains ---
+rustc 1.99.0 (b940084d7 2026-09-28)
+rustc 1.101.0-nightly (822182db4 2026-10-13)
+------------------
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.08s
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.15s
+
+################ native harness ################
+as written: 200000000 runs  (0,0)=199216983 (0,1)=384636 (1,0)=398381 (1,1)=0
+reordered: 10000000 runs  (0,0)=8388661 (0,1)=1433597 (1,0)=177739 (1,1)=3
+reordered: 10000000 runs  (0,0)=7995960 (0,1)=1284005 (1,0)=720030 (1,1)=5
+reordered: 10000000 runs  (0,0)=8502378 (0,1)=1106145 (1,0)=391474 (1,1)=3
+
+################ exhibit 2: message passing ################
+relaxed MP: 100000000 runs  (f, d) == (1, 0) in 0
+release/acquire MP: 100000000 runs  (f, d) == (1, 0) in 0
+
+################ AddressSanitizer ################
+as written: 10000000 runs  (0,0)=7248639 (0,1)=1739111 (1,0)=1012250 (1,1)=0
+--- reordered ---
+reordered: 10000000 runs  (0,0)=8302626 (0,1)=685213 (1,0)=1012159 (1,1)=2
+
+real	0m5.999s
+user	0m16.892s
+sys	0m0.284s
