@@ -7,7 +7,7 @@
 # ISA allows load buffering; and does the reordered program show the
 # use-after-free there, natively and under AddressSanitizer. It also runs the
 # exhibit 2 harness (src/bin/mp.rs): relaxed message passing, which Arm
-# produces and x86 cannot.
+# produces and x86 cannot, and the store-buffering harness (src/bin/sb.rs).
 #
 # SELF-CONTAINED and EPHEMERAL: a throwaway key pair, a security group locked
 # to your public IP, one instance with a 60-minute self-terminate, and an EXIT
@@ -30,6 +30,7 @@ INSTANCE_TYPE="${INSTANCE_TYPE:-c7g.2xlarge}"   # Graviton3, 8 vCPU. c8g=Gravito
 WRITTEN_RUNS="${WRITTEN_RUNS:-200000000}"      # LB search on the program as written
 REORDERED_RUNS="${REORDERED_RUNS:-10000000}"   # per batch, three batches
 MP_RUNS="${MP_RUNS:-100000000}"                # exhibit 2, each ordering
+SB_RUNS="${SB_RUNS:-100000000}"                # store buffering, each variant
 SSH_USER="ec2-user"                              # Amazon Linux 2023
 TAG="lb-uaf-graviton"
 
@@ -159,7 +160,7 @@ scp "${SSH_OPTS[@]}" "$TARBALL" "$SSH_USER@$PUBLIC_IP:/tmp/src.tgz" >/dev/null
 
 say "Installing Rust, building, and running on Graviton…"
 ssh "${SSH_OPTS[@]}" "$SSH_USER@$PUBLIC_IP" \
-  "WRITTEN_RUNS='$WRITTEN_RUNS' REORDERED_RUNS='$REORDERED_RUNS' MP_RUNS='$MP_RUNS' INSTANCE_TYPE='$INSTANCE_TYPE' bash -s" \
+  "WRITTEN_RUNS='$WRITTEN_RUNS' REORDERED_RUNS='$REORDERED_RUNS' MP_RUNS='$MP_RUNS' SB_RUNS='$SB_RUNS' INSTANCE_TYPE='$INSTANCE_TYPE' bash -s" \
   <<'REMOTE' 2>&1 | tee "$RESULTS"
 set -euo pipefail
 echo "================ remote host / hardware ================"
@@ -186,7 +187,7 @@ rustup toolchain install nightly --profile minimal --component rust-src >/dev/nu
 echo "--- toolchains ---"; rustc -V; rustc +nightly -V; echo "------------------"
 
 mkdir -p ~/lbuaf && tar -C ~/lbuaf -xzf /tmp/src.tgz && cd ~/lbuaf
-cargo build --release --bin harness --bin mp 2>&1 | tail -1
+cargo build --release --bin harness --bin mp --bin sb 2>&1 | tail -1
 RUSTFLAGS="-Zsanitizer=address" cargo +nightly build --release --bin harness \
   --target aarch64-unknown-linux-gnu 2>&1 | tail -1
 
@@ -199,6 +200,11 @@ echo
 echo "################ exhibit 2: message passing ################"
 ./target/release/mp relaxed "$MP_RUNS"
 ./target/release/mp release-acquire "$MP_RUNS"
+
+echo
+echo "################ store buffering ################"
+./target/release/sb relaxed "$SB_RUNS"
+./target/release/sb sc-fence "$SB_RUNS"
 
 echo
 echo "################ AddressSanitizer ################"

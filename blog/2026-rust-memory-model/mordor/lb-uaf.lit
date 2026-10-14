@@ -1,0 +1,17 @@
+// LB+UAF: load buffering with a free on one side and a use on the other.
+rC := malloc(1);
+*rC := 0;
+y := 0;
+{
+  r0 := x.load(rlx);
+  y.store(1, rlx);
+  if (r0 = 1) { free(rC); }
+}
+|||
+{
+  r1 := y.load(rlx);
+  x.store(1, rlx);
+  if (r1 = 1) { rv := *rC; }
+}
+%%
+allow (ub) []

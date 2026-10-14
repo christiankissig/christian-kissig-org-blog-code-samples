@@ -10,10 +10,12 @@ post.
 |---|---|---|
 | The opening example, LB+UAF, as written and reordered | `src/lib.rs`, `src/bin/miri-*.rs`, `src/bin/harness.rs` | Miri, native, AddressSanitizer |
 | Exhibit 1: load buffering under loom | `tests/exhibit1_lb_loom.rs` | loom |
+| Exhibit 1: LB+UAF against the model, and the fix | `mordor/*.lit`, `mordor/run.sh` | MoRDor |
 | Exhibit 2: relaxed message passing | `tests/exhibit2_mp.rs`, `src/bin/miri-mp-relaxed.rs`, `src/bin/mp.rs` | loom, Miri, native |
 | Exhibit 3: IRIW with SC fences | `tests/exhibit3_iriw.rs` | loom, Miri |
 | `*mut usize` is not `Send` (E0277) | doctest on `raw_pointer_is_not_send` in `src/lib.rs` | `cargo test --doc` |
 | A non-atomic payload behind a flag | `src/bin/payload-relaxed.rs`, `src/bin/payload-release-acquire.rs` | Miri |
+| Store buffering: Rust is weaker than SC | `src/bin/sb.rs` | native |
 
 ## Requirements
 
@@ -114,6 +116,31 @@ every interleaving it can generate, but it does not explore load buffering, so
 it never reaches an outcome Rust's memory model allows. A passing loom test
 here is loom's model speaking, not Rust's.
 
+### MoRDor: LB+UAF against the model
+
+```sh
+MORDOR=/path/to/mordor mordor/run.sh
+```
+
+[MoRDor](https://github.com/christiankissig/mordor) enumerates the executions
+a memory model allows, instead of running the program. Build it at commit
+`15b90ed` (`git checkout 15b90ed && dune build`; the binary is
+`_build/default/cli/main.exe`). The script runs three versions of LB+UAF under
+C++20 (Rust's contract), RC11 and sMRD:
+
+| Test | C++20 | RC11 | sMRD |
+|---|---|---|---|
+| `lb-uaf.lit`: all Relaxed | 7 executions, UB | 3, no UB | 7, UB |
+| `lb-uaf-acquire.lit`: Acquire loads | 3, UB | 1, no UB | 1, no UB |
+| `lb-uaf-release-acquire.lit`: Release stores, Acquire loads | 1, no UB | 1, no UB | 1, no UB |
+
+Under C++20 the use-after-free is in 2 of the 7 executions, both with
+`r0 == r1 == 1`. RC11 forbids load buffering, so it has none. Acquire loads
+alone do not fix the program under C++20: a relaxed store read by an Acquire
+load creates no synchronisation. Release stores with Acquire loads do. Other
+MoRDor versions may count executions differently; the verdicts should not
+change.
+
 ## Exhibit 2: relaxed message passing
 
 ```rust
@@ -153,6 +180,18 @@ before the late-2024 fixes
 ([rust-lang/miri#2301](https://github.com/rust-lang/miri/issues/2301)), the
 Miri test could fail, reporting an outcome C++20 forbids.
 
+## Store buffering
+
+```sh
+cargo run --release --bin sb -- relaxed  100000000   # (0, 0) on x86 and Arm
+cargo run --release --bin sb -- sc-fence 100000000   # never
+```
+
+`T0: x := 1; r0 := y` and `T1: y := 1; r1 := x`. Both loads reading 0 is
+allowed with Relaxed, which is why Rust is strictly weaker than sequential
+consistency, and both CPUs show it. A SeqCst fence between each store and its
+load forbids it.
+
 ## Safe Rust and `unsafe`
 
 ```sh
@@ -177,9 +216,9 @@ INSTANCE_TYPE=c8g.2xlarge REGION=us-east-2 aarch64/run-graviton.sh   # Graviton4
 
 The script is self-contained and ephemeral. It creates a throwaway key pair and
 a security group locked to your public IP, launches one instance with a
-60-minute self-terminate, builds the crate there, runs the LB+UAF and exhibit 2
-harnesses natively and under AddressSanitizer, and writes the output to
-`aarch64/results/`. An exit trap deletes the instance, the security group and
+60-minute self-terminate, and builds the crate there. It runs the LB+UAF,
+exhibit 2 and store-buffering harnesses natively and LB+UAF under
+AddressSanitizer, and writes the output to `aarch64/results/`. An exit trap deletes the instance, the security group and
 the key pair, even on error. It costs a few cents of EC2 time.
 
 ## Results recorded for the post
@@ -199,13 +238,17 @@ for Miri and AddressSanitizer.
 | LB+UAF reordered, AddressSanitizer, x86 | heap-use-after-free within the first second |
 | LB+UAF reordered, AddressSanitizer, Graviton3 | no report in two runs of 10M. One reached `(1,1)` twice; ASan reports only when the read comes after the free in real time |
 | Exhibit 1, loom | test passes: `(1,1)` never explored |
+| Exhibit 1, MoRDor | see the table above |
 | Exhibit 2, loom | Relaxed: stale read allowed. Release/Acquire: forbidden |
 | Exhibit 2, Miri, `exhibit2_mp`, default seed | Relaxed: 0 stale reads in 2,000 runs. Release/Acquire: 0 |
 | Exhibit 2, Miri, `miri-mp-relaxed`, 64 seeds × 64 runs | 1 seed sees the stale read (seed 8) |
 | Exhibit 2, relaxed, x86 | 0 in 10M |
-| Exhibit 2, relaxed, Graviton3 | 4,761,020 in 100M |
+| Exhibit 2, relaxed, Graviton3 | 4,761,020 and 1,954,952 in two runs of 100M |
 | Exhibit 2, release/acquire, x86 and Graviton3 | 0 |
 | Exhibit 3, loom and Miri | readers never disagree |
+| Store buffering, relaxed, x86 | 59,637 in 10M |
+| Store buffering, relaxed, Graviton3 | 15,952,635 in 100M |
+| Store buffering with SC fences, x86 and Graviton3 | 0 |
 | `payload-relaxed`, Miri | data race reported |
 | `payload-release-acquire`, Miri | clean |
 
@@ -217,7 +260,9 @@ Raw Graviton output is in `aarch64/results/`:
   saw 0 stale reads in 100M: keeping the locations hot in the caches hid the
   reordering. The harness design matters as much as the run count.
 - `graviton-20261014-100521.txt`: the exhibit 2 harness as it is now, with
-  fresh locations for every run, and short LB+UAF batches. Counts on other machines will
+  fresh locations for every run, and short LB+UAF batches.
+- `graviton-20261014-102027.txt`: a second run of the exhibit 2 harness, the
+  store-buffering harness, and short LB+UAF batches. Counts on other machines will
 differ. Reports from other platforms, Arm in particular, are welcome at
 contact@kissig.org.
 

@@ -1,0 +1,17 @@
+// LB+UAF with Release stores and Acquire loads.
+rC := malloc(1);
+*rC := 0;
+y := 0;
+{
+  r0 := x.load(acq);
+  y.store(1, rel);
+  if (r0 = 1) { free(rC); }
+}
+|||
+{
+  r1 := y.load(acq);
+  x.store(1, rel);
+  if (r1 = 1) { rv := *rC; }
+}
+%%
+allow (ub) []
